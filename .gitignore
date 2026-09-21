@@ -6,3 +6,4 @@ backup/
 __pycache__/
 audio/_snap_cand/
 audio/_cele_cand/
+audio/_fx_cand/

@@ -69,6 +69,21 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
 .modal p{margin:0;color:var(--muted);line-height:1.6;word-break:keep-all}
 .modal .time{font-weight:700;color:var(--clay);margin:12px 0 18px;font-variant-numeric:tabular-nums}
 .modal .btn{min-width:140px}
+.modal .time{margin:10px 0 10px}
+.rank{background:var(--board);border-radius:14px;padding:12px 14px;margin:0 0 18px}
+.title-badge{display:inline-block;padding:5px 14px;border-radius:999px;font-weight:800;font-size:16px;
+  color:#fff;background:var(--moss);letter-spacing:.02em;margin-bottom:8px}
+.title-badge.t0{background:linear-gradient(135deg,#b8862b,#e8c35a);color:#2b1d05}
+.title-badge.t1{background:var(--clay)}
+.title-badge.t2{background:var(--moss)}
+.title-badge.t3{background:#6b7f99}
+.title-badge.t4{background:#8a847a}
+.rank .total{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rank .place{margin-top:4px;font-weight:700;font-size:15px}
+.rank .place b{color:var(--clay);font-size:18px}
+.rank .note{margin-top:4px;font-size:11.5px;color:var(--muted)}
+.modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto}
+@media (max-height:760px){.modal img{width:min(170px,44vw)}.modal{padding:20px 18px 18px}}
 </style>
 </head>
 <body>
@@ -103,6 +118,12 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
     <h2 id="doneName"></h2>
     <p id="doneDesc"></p>
     <div class="time" id="doneTime"></div>
+    <div class="rank" id="doneRank">
+      <div class="title-badge" id="doneTitle"></div>
+      <div class="total" id="doneTotal"></div>
+      <div class="place" id="donePlace"></div>
+      <div class="note">플레이 시간으로 어림한 추정 순위예요</div>
+    </div>
     <button class="btn primary" id="nextBtn" type="button">다음 레벨</button>
   </div>
 </div>
@@ -404,26 +425,56 @@ function complete(){
   const last = level===LEVELS.length-1;
   // 축하 연출: 효과음과 폭죽·색종이를 같은 시각표로 맞춘다
   celebrate(last);
-  playSfx('complete');
+  playSfx('clear');                                   // 짧은 축하 징글(퓨전 국악)
   if(last){
-    playSfx('fireworks_big',0.75);
-    later(()=>playSfx('cheer',0.6),300);
-    later(()=>playSfx('allclear',0.9),700);
-  } else {
-    playSfx('fireworks',0.7);
+    later(()=>playSfx('cheer',0.65),400);
+    later(()=>playSfx('allclear',0.9),2600);          // 징글이 끝날 즈음 북·징 팡파르
   }
   // 칭찬 → 도자기 이름과 설명 (→ 마지막 레벨이면 전체 완성 축하). 폭죽이 잦아든 뒤 시작
   const praise='praise'+(1+Math.floor(Math.random()*5));
-  later(()=>say(last ? [praise,'done'+(level+1),'allclear'] : [praise,'done'+(level+1)]), last?1400:1100);
+  later(()=>say(last ? [praise,'done'+(level+1),'allclear'] : [praise,'done'+(level+1)]), last?4300:2300);
   const L=LEVELS[level];
   $('doneImg').src=L.src; $('doneImg').alt=L.full;
   $('doneTag').textContent='레벨 '+(level+1)+' 완성';
   $('doneName').textContent=L.full;
   $('doneDesc').textContent=L.desc;
-  $('doneTime').textContent='걸린 시간 '+fmt(endTime-startTime);
+  $('doneTime').textContent='이번 기록 '+fmt(endTime-startTime);
+  showRank(endTime-startTime);
   $('nextBtn').textContent = level===LEVELS.length-1 ? '처음부터' : '다음 레벨';
   setTimeout(()=>$('overlay').classList.add('show'), 420);
 }
+// ---------- 칭호와 순위(추정) ----------
+// 레벨마다 '보통 사람의 소요 시간(중앙값)'을 조각 수로 어림하고, 플레이 시간이 로그정규분포를
+// 따른다고 가정해 총 누적 시간이 1000명 중 몇 등쯤인지 계산한다. 실제 다른 사람 기록이 아닌 추정치.
+const TITLES = [
+  {max:0.02, name:'전설의 도공'},
+  {max:0.10, name:'도자기 장인'},
+  {max:0.30, name:'숙련 도공'},
+  {max:0.60, name:'견습 도공'},
+  {max:1.01, name:'초보 도공'},
+];
+const medianSec = L => 8 + 5.5*L.cols*L.rows;         // 6조각≈41초, 42조각≈4분
+let times = LEVELS.map(()=>0);                          // 레벨별 최근 완성 시간(ms)
+try{ const t=JSON.parse(localStorage.getItem('puzzle.times')||'null'); if(Array.isArray(t) && t.length===LEVELS.length) times=t; }catch(e){}
+function normCdf(z){ // Abramowitz-Stegun 근사
+  const t=1/(1+0.2316419*Math.abs(z)), d=0.3989423*Math.exp(-z*z/2);
+  const p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));
+  return z>0 ? 1-p : p;
+}
+function showRank(ms){
+  times[level]=ms;
+  try{ localStorage.setItem('puzzle.times', JSON.stringify(times)); }catch(e){}
+  let total=0, med=0, n=0;
+  LEVELS.forEach((L,i)=>{ if(times[i]>0){ total+=times[i]; med+=medianSec(L)*1000; n++; } });
+  const sigma = 0.6/Math.sqrt(Math.max(1,n)) + 0.25;    // 여러 레벨을 합칠수록 편차가 줄어듦
+  const frac = normCdf(Math.log(total/med)/sigma);       // 나보다 빠른 사람 비율
+  const place = Math.min(1000, Math.max(1, Math.round(frac*1000)));
+  const ti = TITLES.findIndex(t=>frac<=t.max);
+  $('doneTitle').textContent = TITLES[ti].name; $('doneTitle').className='title-badge t'+ti;
+  $('doneTotal').textContent = '총 누적 시간 '+fmt(total)+' · 완성 '+n+' / '+LEVELS.length+'점';
+  $('donePlace').innerHTML = `1000명 중 <b>${place}번째</b>로 빠르네요.`;
+}
+
 function renderLevelButtons(){
   const box=$('levels'); box.innerHTML='';
   LEVELS.forEach((L,i)=>{
@@ -438,7 +489,7 @@ function renderLevelButtons(){
 // ---------- audio: ElevenLabs 효과음 + 한국어 보이스 ----------
 // 파일은 tools/gen_audio.py 로 생성. 모드 2=효과음+보이스, 1=효과음만, 0=무음
 const AUDIO_BASE='audio/';
-const SFX_NAMES=['pickup','snap','miss','shuffle','hint','complete','allclear','fireworks','fireworks_big','cheer'];
+const SFX_NAMES=['pickup','snap','miss','shuffle','hint','complete','allclear','cheer','boom','whistle','clear'];
 const VOICE_NAMES=['intro','half','hint','shuffle','allclear','praise1','praise2','praise3','praise4','praise5'].concat(LEVELS.flatMap((_,k)=>['lv'+(k+1),'done'+(k+1)]));
 const sfx={}, voice={};
 const mkAudio=f=>{ const a=new Audio(AUDIO_BASE+f+'.mp3'); a.preload='auto'; return a; };
@@ -448,10 +499,10 @@ let soundMode=2;
 try{ const s=localStorage.getItem('puzzle.sound'); if(s!==null) soundMode=+s; }catch(e){}
 let unlocked=false, curVoice=null, voiceQueue=[], pendingVoice=null, halfSaid=false;
 
-function playSfx(n, vol=1){
+function playSfx(n, vol=1, rate=1){
   if(soundMode<1) return;
   const a=sfx[n]; if(!a || a.error){ if(n==='snap') click(); return; }
-  try{ const c=a.cloneNode(); c.volume=vol; c.play().catch(()=>{}); }catch(e){}
+  try{ const c=a.cloneNode(); c.volume=vol; c.playbackRate=rate; c.preservesPitch=false; c.play().catch(()=>{}); }catch(e){}
 }
 // ---- 배경 음악: 잔잔한 퓨전 국악(ElevenLabs Music), 보이스가 나올 때는 소리를 줄임 ----
 const BGM_VOL=0.22, BGM_DUCK=0.08;
@@ -586,13 +637,18 @@ $('hintBtn').addEventListener('click', ()=>{ hintUntil=performance.now()+2000; p
 $('shuffleBtn').addEventListener('click', ()=>{ scatter(); startTimer(); updateProgress(); halfSaid=false; playSfx('shuffle'); say('shuffle'); });
 $('nextBtn').addEventListener('click', ()=>{
   $('overlay').classList.remove('show');
-  loadLevel(level===LEVELS.length-1 ? 0 : level+1);
+  if(level===LEVELS.length-1){
+    // 10점을 모두 끝내고 '처음부터'를 누르면 누적 기록을 새로 시작
+    times=LEVELS.map(()=>0);
+    try{ localStorage.setItem('puzzle.times', JSON.stringify(times)); }catch(e){}
+    loadLevel(0);
+  } else loadLevel(level+1);
 });
 
 // ---------- 축하 연출: 폭죽 + 색종이 (화면 전체 캔버스, 클릭은 통과) ----------
-// 폭죽이 터지는 시각(초)은 audio/fireworks*.mp3 의 실제 터짐 소리 위치에 맞춤
-const FX_SMALL = [0.15, 0.65, 0.95, 1.25];
-const FX_BIG   = [0.15, 0.45, 0.9, 1.4, 1.9, 2.4, 2.8, 3.3, 3.7];
+// 폭죽이 터지는 시각(초). 터질 때마다 boom, 쏘아 올릴 때마다 whistle 소리를 낸다
+const FX_SMALL = [0.35, 0.8, 1.2, 1.6];
+const FX_BIG   = [0.3, 0.7, 1.1, 1.5, 1.9, 2.3, 2.8, 3.3, 3.7];
 const FX_BIG_BOOM = [3.3, 3.7];                        // 크게 터지는 두 번
 const FX_COLORS = ['#1f5fa8','#c8372d','#e8b830','#f4efe4','#2b2b2b','#a8683f','#4f6f63','#e98aa6'];
 const fxCanvas = document.createElement('canvas');
@@ -620,6 +676,7 @@ function confetti(x, y, n, spreadDeg, dirDeg, speed){
   }
 }
 function burst(x, y, big){
+  playSfx('boom', big?1:0.85, big?0.85:rnd(0.95,1.12));
   const n = big ? 150 : 80, col=pick(FX_COLORS.slice(0,4).concat(['#ffd36e','#ff9d7a'])), col2=pick(FX_COLORS);
   const sp = big ? 420 : 300;
   for(let i=0;i<n;i++){
@@ -630,6 +687,7 @@ function burst(x, y, big){
   fxParts.push({k:'f', x, y, r:big?90:55, life:.28, t:0});   // 터지는 순간의 섬광
 }
 function rocket(x, yTo, delay, big){
+  playSfx('whistle', 0.45, rnd(0.95,1.1));
   // 연기 꼬리를 남기며 올라가다 delay 초 뒤 터짐
   fxParts.push({k:'r', x, y:fxH+10, vx:rnd(-30,30), vy:-(fxH+10-yTo)/delay, life:delay, t:0, big});
 }
