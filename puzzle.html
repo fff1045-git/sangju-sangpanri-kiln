@@ -83,6 +83,7 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
     <div class="stat" id="progress">0 / 0 조각</div>
     <div class="stat">경과 <b id="timer">00:00</b></div>
     <div class="sp"></div>
+    <button class="btn" id="soundBtn" type="button" title="소리 설정">🔊 소리·보이스</button>
     <button class="btn" id="hintBtn" type="button">힌트</button>
     <button class="btn" id="shuffleBtn" type="button">다시 섞기</button>
   </div>
@@ -328,7 +329,10 @@ function loadLevel(i){
   img.onerror = ()=>{ img.failed=true; };
   img.src = L.src;
   scatter(); startTimer(); updateProgress();
+  halfSaid=false;
+  say(firstLoad ? ['intro','lv'+(i+1)] : ['lv'+(i+1)]); firstLoad=false;
 }
+let firstLoad=true;
 function scatter(){
   // cancel any drag in progress so a piece can't be locked by a stale pointerup
   dragging=null; canvas.classList.remove('dragging');
@@ -373,6 +377,10 @@ function updateProgress(){
 function complete(){
   clearInterval(timerId); endTime=performance.now();
   cleared[level]=true; renderLevelButtons();
+  const last = level===LEVELS.length-1;
+  playSfx('complete');
+  if(last){ setTimeout(()=>playSfx('allclear',0.9),700); say(['done3','allclear']); }
+  else say('done'+(level+1));
   const L=LEVELS[level];
   $('doneImg').src=L.src; $('doneImg').alt=L.full;
   $('doneTag').textContent='레벨 '+(level+1)+' 완성';
@@ -393,7 +401,59 @@ function renderLevelButtons(){
   });
 }
 
-// ---------- audio click ----------
+// ---------- audio: ElevenLabs 효과음 + 한국어 보이스 ----------
+// 파일은 tools/gen_audio.py 로 생성. 모드 2=효과음+보이스, 1=효과음만, 0=무음
+const AUDIO_BASE='audio/';
+const SFX_NAMES=['pickup','snap','miss','shuffle','hint','complete','allclear'];
+const VOICE_NAMES=['intro','lv1','lv2','lv3','half','hint','shuffle','done1','done2','done3','allclear'];
+const sfx={}, voice={};
+const mkAudio=f=>{ const a=new Audio(AUDIO_BASE+f+'.mp3'); a.preload='auto'; return a; };
+SFX_NAMES.forEach(n=>sfx[n]=mkAudio(n));
+VOICE_NAMES.forEach(n=>voice[n]=mkAudio('v_'+n));
+let soundMode=2;
+try{ const s=localStorage.getItem('puzzle.sound'); if(s!==null) soundMode=+s; }catch(e){}
+let unlocked=false, curVoice=null, voiceQueue=[], pendingVoice=null, halfSaid=false;
+
+function playSfx(n, vol=1){
+  if(soundMode<1) return;
+  const a=sfx[n]; if(!a || a.error){ if(n==='snap') click(); return; }
+  try{ const c=a.cloneNode(); c.volume=vol; c.play().catch(()=>{}); }catch(e){}
+}
+function stopVoice(){ voiceQueue=[]; if(curVoice){ curVoice.pause(); curVoice.currentTime=0; curVoice=null; } }
+function playNextVoice(){
+  curVoice=null;
+  const n=voiceQueue.shift(); if(!n) return;
+  const a=voice[n]; if(!a || a.error){ playNextVoice(); return; }
+  curVoice=a; a.currentTime=0; a.onended=playNextVoice;
+  a.play().catch(()=>{ playNextVoice(); });
+}
+// say('x') 또는 say(['a','b']): 진행 중인 말은 끊고 새 대사를 차례로 재생
+function say(names){
+  if(soundMode<2) return;
+  const list=Array.isArray(names)?names:[names];
+  if(!unlocked){ pendingVoice=list; return; }   // 브라우저 자동재생 정책: 첫 클릭 뒤에 재생
+  stopVoice(); voiceQueue=list.slice(); playNextVoice();
+}
+function unlockAudio(){
+  if(unlocked) return; unlocked=true;
+  if(pendingVoice){ const l=pendingVoice; pendingVoice=null; say(l); }
+}
+document.addEventListener('pointerdown', unlockAudio, true);
+document.addEventListener('keydown', unlockAudio, true);
+function renderSoundBtn(){
+  $('soundBtn').textContent = ['🔇 무음','🔉 효과음만','🔊 소리·보이스'][soundMode];
+  $('soundBtn').setAttribute('aria-label','소리 설정: '+['무음','효과음만','효과음과 보이스'][soundMode]);
+}
+$('soundBtn').addEventListener('click', ()=>{
+  soundMode=(soundMode+2)%3;      // 2 → 1 → 0 → 2
+  try{ localStorage.setItem('puzzle.sound',soundMode); }catch(e){}
+  if(soundMode<2){ stopVoice(); pendingVoice=null; }
+  renderSoundBtn();
+  if(soundMode>=1) playSfx('snap',0.8);
+});
+renderSoundBtn();
+
+// 오디오 파일이 없을 때(오프라인 복사본 등) 쓰는 대체 클릭음
 function click(){
   try{
     audio = audio || new (window.AudioContext||window.webkitAudioContext)();
@@ -418,6 +478,7 @@ canvas.addEventListener('pointerdown', e=>{
     if(p.locked) continue;
     if(pointInPoly(u.x-p.x+p.minx, u.y-p.y+p.miny, p.poly)){
       dragging=p; dragOff={x:u.x-p.x, y:u.y-p.y};
+      playSfx('pickup',0.7);
       pieces.splice(i,1); pieces.push(p);   // bring to top
       canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
       e.preventDefault(); return;
@@ -437,16 +498,20 @@ function endDrag(e){
   const tx=TX+p.minx, ty=TY+p.miny, tol=SNAP_PX/scale;
   if(Math.hypot(p.x-tx,p.y-ty)<=tol){
     p.x=tx; p.y=ty; p.locked=true; p.flash=performance.now();
-    click(); updateProgress();
-    if(pieces.every(q=>q.locked)) complete();
+    playSfx('snap'); updateProgress();
+    const n=pieces.filter(q=>q.locked).length;
+    if(n===pieces.length) complete();
+    else if(!halfSaid && n>=Math.ceil(pieces.length/2)){ halfSaid=true; say('half'); }
+  } else {
+    playSfx('miss',0.6);
   }
 }
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 
 // ---------- buttons ----------
-$('hintBtn').addEventListener('click', ()=>{ hintUntil=performance.now()+2000; });
-$('shuffleBtn').addEventListener('click', ()=>{ scatter(); startTimer(); updateProgress(); });
+$('hintBtn').addEventListener('click', ()=>{ hintUntil=performance.now()+2000; playSfx('hint'); say('hint'); });
+$('shuffleBtn').addEventListener('click', ()=>{ scatter(); startTimer(); updateProgress(); halfSaid=false; playSfx('shuffle'); say('shuffle'); });
 $('nextBtn').addEventListener('click', ()=>{
   $('overlay').classList.remove('show');
   loadLevel(level===LEVELS.length-1 ? 0 : level+1);
