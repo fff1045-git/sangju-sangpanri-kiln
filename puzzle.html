@@ -26,11 +26,12 @@ html,body{margin:0;background:var(--paper);color:var(--ink);
 header h1{margin:0 0 6px;font-size:clamp(22px,4vw,32px);letter-spacing:-.02em}
 header h1 span{color:var(--clay)}
 header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
-.levels{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.lv{flex:1 1 150px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);
+.levels{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+@media (max-width:620px){.levels{grid-template-columns:repeat(3,1fr)}}
+.lv{min-width:0;border:1.5px solid var(--line);background:var(--card);color:var(--ink);
   border-radius:14px;padding:10px 14px;cursor:pointer;font:inherit;text-align:left;
   transition:border-color .15s,box-shadow .15s}
-.lv b{font-size:15px}
+.lv b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lv small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
 .lv:hover{border-color:var(--moss)}
 .lv.active{border-color:var(--clay);box-shadow:0 0 0 3px rgba(168,104,63,.16)}
@@ -83,6 +84,7 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
     <div class="stat" id="progress">0 / 0 조각</div>
     <div class="stat">경과 <b id="timer">00:00</b></div>
     <div class="sp"></div>
+    <button class="btn" id="musicBtn" type="button" title="배경 음악 켜기/끄기">🎵 음악 켬</button>
     <button class="btn" id="soundBtn" type="button" title="소리 설정">🔊 소리·보이스</button>
     <button class="btn" id="hintBtn" type="button">힌트</button>
     <button class="btn" id="shuffleBtn" type="button">다시 섞기</button>
@@ -111,14 +113,35 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
 
 const LEVELS = [
   { key:'daejeop',   name:'대접',   full:'분청사기 인화문 대접', cols:3, rows:2,
-    src:'images/puzzle/level1_daejeop.png',
+    src:'images/puzzle/level1_daejeop.jpg',
     desc:'관청 이름을 새겨 궁중에 납품하던 그릇' },
   { key:'hyangno',   name:'향로',   full:'분청사기 향로', cols:3, rows:3,
-    src:'images/puzzle/level2_hyangno.png',
+    src:'images/puzzle/level2_hyangno.jpg',
     desc:'제사와 의례에 쓰인 왕실용 특수 기종' },
   { key:'jarabyeong',name:'자라병', full:'상감분청 자라병', cols:4, rows:3,
-    src:'images/puzzle/level3_jarabyeong.png',
+    src:'images/puzzle/level3_jarabyeong.jpg',
     desc:'전세품으로만 알려졌다가 상판리에서 조각이 처음 출토된 기종' },
+  { key:'gojokbae',  name:'고족배', full:'분청사기 고족배', cols:4, rows:4,
+    src:'images/puzzle/level4_gojokbae.jpg',
+    desc:'굽이 높은 잔. 제사상에 올리던 그릇' },
+  { key:'hap',       name:'합',     full:'분청사기 인화문 합', cols:5, rows:4,
+    src:'images/puzzle/level5_hap.jpg',
+    desc:'뚜껑 있는 그릇. 음식이나 귀한 물건을 담았어요' },
+  { key:'begae',     name:'베개',   full:'분청사기 인화문 베개', cols:6, rows:4,
+    src:'images/puzzle/level6_begae.jpg',
+    desc:'도장으로 무늬를 찍은 도자기 베개. 상판리 가마1에서 출토' },
+  { key:'janggo',    name:'장고',   full:'분청사기 장고', cols:5, rows:5,
+    src:'images/puzzle/level7_janggo.jpg',
+    desc:'장구 몸통을 흙으로 빚어 구운 드문 기종' },
+  { key:'hwabun',    name:'화분',   full:'분청사기 화분과 받침', cols:6, rows:5,
+    src:'images/puzzle/level8_hwabun.jpg',
+    desc:'궁궐 뜰을 꾸미던 왕실용 화분' },
+  { key:'bo',        name:'제기 보', full:'분청사기 제기 보(簠)', cols:6, rows:6,
+    src:'images/puzzle/level9_jegi_bo.jpg',
+    desc:'나라 제사에 곡식을 담던 네모난 제기' },
+  { key:'don',       name:'돈',     full:'분청사기 돈(墩, 도자기 의자)', cols:7, rows:6,
+    src:'images/puzzle/level10_don.jpg',
+    desc:'도자기로 만든 의자. 왕실 정원에 놓던 귀한 물건' },
 ];
 
 const IMG = 1024;          // target image size in board units
@@ -136,7 +159,7 @@ let level = -1, img = null, imgOk = false, pieces = [], edges = null;
 let dragging = null, dragOff = {x:0,y:0};
 let startTime = 0, endTime = 0, timerId = 0;
 let hintUntil = 0;
-let cleared = [false,false,false];
+let cleared = LEVELS.map(()=>false);
 let audio = null;
 
 // ---------- utils ----------
@@ -379,7 +402,7 @@ function complete(){
   cleared[level]=true; renderLevelButtons();
   const last = level===LEVELS.length-1;
   playSfx('complete');
-  if(last){ setTimeout(()=>playSfx('allclear',0.9),700); say(['done3','allclear']); }
+  if(last){ setTimeout(()=>playSfx('allclear',0.9),700); say(['done'+(level+1),'allclear']); }
   else say('done'+(level+1));
   const L=LEVELS[level];
   $('doneImg').src=L.src; $('doneImg').alt=L.full;
@@ -405,7 +428,7 @@ function renderLevelButtons(){
 // 파일은 tools/gen_audio.py 로 생성. 모드 2=효과음+보이스, 1=효과음만, 0=무음
 const AUDIO_BASE='audio/';
 const SFX_NAMES=['pickup','snap','miss','shuffle','hint','complete','allclear'];
-const VOICE_NAMES=['intro','lv1','lv2','lv3','half','hint','shuffle','done1','done2','done3','allclear'];
+const VOICE_NAMES=['intro','half','hint','shuffle','allclear'].concat(LEVELS.flatMap((_,k)=>['lv'+(k+1),'done'+(k+1)]));
 const sfx={}, voice={};
 const mkAudio=f=>{ const a=new Audio(AUDIO_BASE+f+'.mp3'); a.preload='auto'; return a; };
 SFX_NAMES.forEach(n=>sfx[n]=mkAudio(n));
@@ -419,12 +442,45 @@ function playSfx(n, vol=1){
   const a=sfx[n]; if(!a || a.error){ if(n==='snap') click(); return; }
   try{ const c=a.cloneNode(); c.volume=vol; c.play().catch(()=>{}); }catch(e){}
 }
+// ---- 배경 음악: 잔잔한 퓨전 국악(ElevenLabs Music), 보이스가 나올 때는 소리를 줄임 ----
+const BGM_VOL=0.22, BGM_DUCK=0.08;
+const bgm=mkAudio('bgm'); bgm.loop=true; bgm.volume=0;
+let musicOn=true, bgmTarget=BGM_VOL, bgmFadeId=0;
+try{ const m=localStorage.getItem('puzzle.music'); if(m!==null) musicOn = m==='1'; }catch(e){}
+function fadeBgm(to, ms=600){
+  // setInterval 사용: 탭이 가려져 rAF가 멈춰도 페이드가 끝까지 진행되게
+  bgmTarget=to; clearInterval(bgmFadeId);
+  const from=bgm.volume, t0=performance.now();
+  bgmFadeId=setInterval(()=>{
+    const k=Math.min(1,(performance.now()-t0)/ms); bgm.volume=Math.max(0,Math.min(1,from+(to-from)*k));
+    if(k>=1){ clearInterval(bgmFadeId); if(to===0) bgm.pause(); }
+  },30);
+}
+function startBgm(){
+  if(!musicOn || !unlocked || bgm.error) return;
+  if(bgm.paused) bgm.play().catch(()=>{});
+  fadeBgm(curVoice ? BGM_DUCK : BGM_VOL, 1500);
+}
+function renderMusicBtn(){
+  $('musicBtn').textContent = musicOn ? '🎵 음악 켬' : '🎵 음악 끔';
+  $('musicBtn').setAttribute('aria-pressed', musicOn?'true':'false');
+}
+$('musicBtn').addEventListener('click', ()=>{
+  musicOn=!musicOn;
+  try{ localStorage.setItem('puzzle.music', musicOn?'1':'0'); }catch(e){}
+  renderMusicBtn();
+  if(musicOn){ unlockAudio(); startBgm(); } else fadeBgm(0,400);
+});
+renderMusicBtn();
+
 function stopVoice(){ voiceQueue=[]; if(curVoice){ curVoice.pause(); curVoice.currentTime=0; curVoice=null; } }
 function playNextVoice(){
   curVoice=null;
-  const n=voiceQueue.shift(); if(!n) return;
+  const n=voiceQueue.shift();
+  if(!n){ if(musicOn && !bgm.paused) fadeBgm(BGM_VOL,900); return; }
   const a=voice[n]; if(!a || a.error){ playNextVoice(); return; }
   curVoice=a; a.currentTime=0; a.onended=playNextVoice;
+  if(musicOn && !bgm.paused) fadeBgm(BGM_DUCK,300);
   a.play().catch(()=>{ playNextVoice(); });
 }
 // say('x') 또는 say(['a','b']): 진행 중인 말은 끊고 새 대사를 차례로 재생
@@ -437,6 +493,7 @@ function say(names){
 function unlockAudio(){
   if(unlocked) return; unlocked=true;
   if(pendingVoice){ const l=pendingVoice; pendingVoice=null; say(l); }
+  startBgm();
 }
 document.addEventListener('pointerdown', unlockAudio, true);
 document.addEventListener('keydown', unlockAudio, true);
@@ -503,7 +560,7 @@ function endDrag(e){
     if(n===pieces.length) complete();
     else if(!halfSaid && n>=Math.ceil(pieces.length/2)){ halfSaid=true; say('half'); }
   } else {
-    playSfx('miss',0.6);
+    playSfx('miss',0.85);   // 제자리가 아닌 곳에 내려놓음
   }
 }
 canvas.addEventListener('pointerup', endDrag);
@@ -525,7 +582,7 @@ applyLayout();
 renderLevelButtons();
 loadLevel(0);
 loop();
-window.__puzzle = { get pieces(){return pieces;}, get TX(){return TX;}, get TY(){return TY;}, get scale(){return scale;}, get level(){return level;} };
+window.__puzzle = { get pieces(){return pieces;}, get TX(){return TX;}, get TY(){return TY;}, get scale(){return scale;}, get level(){return level;}, get bgm(){return bgm;} };
 })();
 </script>
 </body>
