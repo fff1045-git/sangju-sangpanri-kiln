@@ -330,18 +330,36 @@ function loadLevel(i){
   scatter(); startTimer(); updateProgress();
 }
 function scatter(){
-  const inflate=30;
-  for(const p of pieces){
-    p.locked=false; p.flash=0;
-    let ok=false;
-    for(let t=0;t<300 && !ok;t++){
-      p.x = rnd(8, BW-p.w-8); p.y = rnd(8, BH-p.h-8);
-      const cx=p.x+p.w/2, cy=p.y+p.h/2;
-      ok = !(cx>TX-inflate && cx<TX+IMG+inflate && cy>TY-inflate && cy<TY+IMG+inflate);
-    }
-  }
-  // shuffle z-order
+  // cancel any drag in progress so a piece can't be locked by a stale pointerup
+  dragging=null; canvas.classList.remove('dragging');
+  for(const p of pieces){ p.locked=false; p.flash=0; }
+  // shuffle z-order (draw order = array order)
   for(let i=pieces.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pieces[i],pieces[j]]=[pieces[j],pieces[i]]; }
+  // free zones outside the target: left/right strips (wide) or the tray below (narrow)
+  const gap=40;
+  const zones = layout==='wide'
+    ? [{x:8,y:8,w:TX-gap-8,h:BH-16},{x:TX+IMG+gap,y:8,w:BW-8-(TX+IMG+gap),h:BH-16}]
+    : [{x:8,y:TY+IMG+gap,w:BW-16,h:BH-8-(TY+IMG+gap)}];
+  const maxW=Math.max(...pieces.map(p=>p.w)), maxH=Math.max(...pieces.map(p=>p.h));
+  // deal pieces round-robin into zones, then lay each zone out as a staggered grid:
+  // every piece keeps its top-left corner uncovered, so none can hide under another
+  const buckets=zones.map(()=>[]);
+  pieces.forEach((p,i)=>buckets[i%zones.length].push(p));
+  zones.forEach((z,zi)=>{
+    const list=buckets[zi], n=list.length; if(!n) return;
+    // columns must keep a stride of at least 35% of a piece width, or later pieces cover earlier ones
+    const maxCols=Math.max(1,Math.floor((z.w-maxW)/(0.35*maxW))+1);
+    const cols=Math.max(1,Math.min(n,maxCols,Math.ceil(Math.sqrt(n*z.w/z.h)))), rows=Math.ceil(n/cols);
+    const sx = cols>1 ? Math.max(0,(z.w-maxW)/(cols-1)) : 0;
+    const sy = rows>1 ? Math.max(0,(z.h-maxH)/(rows-1)) : 0;
+    list.forEach((p,i)=>{
+      const c=i%cols, r=Math.floor(i/cols);
+      const jx=Math.min(sx,maxW)*0.25, jy=Math.min(sy,maxH)*0.25;
+      p.x = z.x + c*sx + (cols>1 ? 0 : rnd(0,Math.max(0,z.w-p.w))) + rnd(-jx,jx);
+      p.y = z.y + r*sy + (rows>1 ? 0 : rnd(0,Math.max(0,z.h-p.h))) + rnd(-jy,jy);
+      clampPiece(p);
+    });
+  });
 }
 function startTimer(){
   clearInterval(timerId); startTime=performance.now(); endTime=0;
