@@ -81,7 +81,6 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
 .rank .total{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
 .rank .place{margin-top:4px;font-weight:700;font-size:15px}
 .rank .place b{color:var(--clay);font-size:18px}
-.rank .note{margin-top:4px;font-size:11.5px;color:var(--muted)}
 .modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto}
 @media (max-height:760px){.modal img{width:min(170px,44vw)}.modal{padding:20px 18px 18px}}
 </style>
@@ -122,7 +121,6 @@ header p{margin:0 0 16px;color:var(--muted);line-height:1.55}
       <div class="title-badge" id="doneTitle"></div>
       <div class="total" id="doneTotal"></div>
       <div class="place" id="donePlace"></div>
-      <div class="note">플레이 시간으로 어림한 추정 순위예요</div>
     </div>
     <button class="btn primary" id="nextBtn" type="button">다음 레벨</button>
   </div>
@@ -687,7 +685,7 @@ function burst(x, y, big){
   fxParts.push({k:'f', x, y, r:big?90:55, life:.28, t:0});   // 터지는 순간의 섬광
 }
 function rocket(x, yTo, delay, big){
-  playSfx('whistle', 0.45, rnd(0.95,1.1));
+  playSfx('whistle', 0.36, rnd(0.95,1.1));   // 휘익 소리: 20% 줄임
   // 연기 꼬리를 남기며 올라가다 delay 초 뒤 터짐
   fxParts.push({k:'r', x, y:fxH+10, vx:rnd(-30,30), vy:-(fxH+10-yTo)/delay, life:delay, t:0, big});
 }
