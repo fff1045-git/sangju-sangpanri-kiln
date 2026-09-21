@@ -22,9 +22,10 @@ def stt(path):
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r).get("text","")
 
-print("[sfx durations]")
-for n in SFX: print(f"  {n:9s} {dur(os.path.join(OUT,n+'.mp3')):5.2f}s")
-print("[voice: script -> STT]")
-for n,t in VOICE.items():
-    p=os.path.join(OUT,"v_"+n+".mp3")
-    print(f"  {n:9s} {dur(p):5.2f}s | {t}\n            STT: {stt(p)}")
+if __name__ == "__main__":
+    print("[sfx durations]")
+    for n in SFX: print(f"  {n:9s} {dur(os.path.join(OUT,n+'.mp3')):5.2f}s")
+    print("[voice: script -> STT]")
+    for n,t in VOICE.items():
+        p=os.path.join(OUT,"v_"+n+".mp3")
+        print(f"  {n:9s} {dur(p):5.2f}s | {t}\n            STT: {stt(p)}")
