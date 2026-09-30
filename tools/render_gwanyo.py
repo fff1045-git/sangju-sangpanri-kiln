@@ -25,11 +25,11 @@ def table(tb):
     return f'<div class="tw"><table>{cap}<tr>{h}</tr>{rows}</table></div>'
 
 IMGS = {
-    0: ("images/gwanyo/gamjo_1411.jpg", "1411년 한양에서 온 관원이 중모현 가마에서 화기 견본을 살펴보는 상상도",
+    "쟁점 정리": ("images/gwanyo/gamjo_1411.jpg", "1411년 한양에서 온 관원이 중모현 가마에서 화기 견본을 살펴보는 상상도",
         "그림 1. 1411년, 한양에서 파견된 내수(內竪)가 중모현 가마의 화기(花器) 제작을 감독하는 장면(AI 상상도). 『태종실록』의 '監做花器' 기록을 그림으로 옮긴 것으로, 실제 인물·복식·기물의 고증 자료가 아니에요."),
-    3: ("images/gwanyo/gongnap_route.jpg", "짚으로 싼 도자기를 지게와 달구지에 싣고 산길을 넘어 한양으로 가는 공납 행렬 상상도",
+    "고고학 근거": ("images/gwanyo/gongnap_route.jpg", "짚으로 싼 도자기를 지게와 달구지에 싣고 산길을 넘어 한양으로 가는 공납 행렬 상상도",
         "그림 2. 상주에서 한양으로 가는 공납 도자기 행렬(AI 상상도). 관청 이름을 새긴 그릇은 이런 길을 거쳐 궁궐 관청에 닿았어요."),
-    5: ("images/gwanyo/bunwon_vs_jibang.jpg", "왼쪽은 관청 건물과 여러 가마가 있는 광주 분원, 오른쪽은 초가 작업장과 가마 하나가 있는 지방 자기소를 나란히 그린 상상도",
+    "관요라는 말": ("images/gwanyo/bunwon_vs_jibang.jpg", "왼쪽은 관청 건물과 여러 가마가 있는 광주 분원, 오른쪽은 초가 작업장과 가마 하나가 있는 지방 자기소를 나란히 그린 상상도",
         "그림 3. 왼쪽은 사옹원 분원(경기 광주)의 관요, 오른쪽은 지방의 상품 자기소(AI 상상도). 학계가 '관요'라는 말을 쓸 때 보통 떠올리는 것은 왼쪽 같은 체제예요."),
 }
 
@@ -82,10 +82,10 @@ footer{{margin-top:48px;font-size:12.5px;color:var(--muted);border-top:1px solid
 </head>
 <body><div class="wrap">
 <header class="hero">
-  <div class="eyebrow">쟁점 정리 · 2026년 9월 30일 기준</div>
+  <div class="eyebrow">{esc(S.get('eyebrow','쟁점 정리 · 2026년 9월 30일 기준'))}</div>
   <h1>{esc(S['title'])}</h1>
   <p class="lede">{esc(S['one_line'])}</p>
-  <div class="meta">조선왕조실록·국가유산포털·국가법령정보센터·학술 논문·언론 보도를 조사하고, 주장마다 별도 검증을 거쳐 정리했어요. 삽화 3점은 AI(GPT Image)로 그린 상상도예요. 보존회 관계자의 실명은 쓰지 않았어요.</div>
+  <div class="meta">{S.get('meta_html','조선왕조실록·국가유산포털·국가법령정보센터·학술 논문·사전·언론 보도를 조사하고, 주장마다 별도 검증을 거쳐 정리했어요. 삽화 3점은 AI(GPT Image)로 그린 상상도예요. 보존회 관계자의 실명은 쓰지 않았어요. 단체 예산·운영에 관한 내용은 <a href="bojonhoe.html">보존회 운영 원칙</a>에 따로 정리했어요.')}</div>
 </header>
 """)
 
@@ -97,15 +97,17 @@ secs = S["sections"]
 for s in secs:  # 합성 단계가 붙인 "1. " 번호는 렌더러가 다시 붙이므로 뗀다
     s["heading"] = re.sub(r"^\s*\d+\.\s*", "", s["heading"])
 toc = "".join(f'<div><a href="#s{i+1}">{i+1:02d} {esc(s["heading"])}</a></div>' for i, s in enumerate(secs))
-extra = [("term", "용어 선택 권고"), ("corr", "원문 글의 바로잡을 점"), ("rec", "실행 권고"), ("ref", "출처")]
+extra = ([("term", "용어 선택 권고")] if S.get("term_positions") else []) + ([("corr", "원문 글의 바로잡을 점")] if S.get("corrections") else []) + [("rec", "실행 권고"), ("ref", "출처")]
+num = {a: len(secs) + i + 1 for i, (a, _) in enumerate(extra)}
 toc += "".join(f'<div><a href="#{a}">{len(secs)+i+1:02d} {t}</a></div>' for i, (a, t) in enumerate(extra))
 parts.append(f'<nav class="toc">{toc}</nav>')
 
 # 본문 절
 for i, s in enumerate(secs):
     parts.append(f'<h2 id="s{i+1}"><span class="n">{i+1:02d}</span>{esc(s["heading"])}</h2>')
-    if i in IMGS:
-        src_, alt, cap = IMGS[i]
+    key = next((k for k in IMGS if k in s["heading"]), None) if S.get("images", True) else None
+    if key:
+        src_, alt, cap = IMGS[key]
         parts.append(f'<figure><img src="{src_}" alt="{esc(alt)}" loading="lazy"><figcaption>{esc(cap)}</figcaption></figure>')
     for para in s["body"]:
         parts.append(f"<p>{fn(para)}</p>")
@@ -116,16 +118,17 @@ for i, s in enumerate(secs):
 # 용어 권고
 n0 = len(secs)
 badge = {"권장": "ok", "조건부 사용": "mid", "비권장": "no"}
-rows = "".join(f'<tr><td><b>{esc(t["term"])}</b></td><td><span class="pill {badge.get(t["recommendation"],"mid")}">{esc(t["recommendation"])}</span></td><td>{fn(t["support"])}</td><td>{fn(t["against"])}</td><td>{fn(t["reason"])}</td></tr>' for t in S["term_positions"])
-parts.append(f'<h2 id="term"><span class="n">{n0+1:02d}</span>용어 선택 권고</h2><div class="tw"><table><tr><th style="width:16%">용어</th><th style="width:11%">권고</th><th>뒷받침하는 근거</th><th>반대 근거</th><th>판단 이유</th></tr>{rows}</table></div>')
+if S.get("term_positions"):
+  rows = "".join(f'<tr><td><b>{esc(t["term"])}</b></td><td><span class="pill {badge.get(t["recommendation"],"mid")}">{esc(t["recommendation"])}</span></td><td>{fn(t["support"])}</td><td>{fn(t["against"])}</td><td>{fn(t["reason"])}</td></tr>' for t in S["term_positions"])
+  parts.append(f'<h2 id="term"><span class="n">{num["term"]:02d}</span>용어 선택 권고</h2><div class="tw"><table><tr><th style="width:16%">용어</th><th style="width:11%">권고</th><th>뒷받침하는 근거</th><th>반대 근거</th><th>판단 이유</th></tr>{rows}</table></div>')
 
 # 바로잡을 점
-if S["corrections"]:
+if S.get("corrections"):
     rows = "".join(f'<tr><td>{fn(c["original"])}</td><td>{fn(c["corrected"])}</td><td>{fn(c["why"])}</td></tr>' for c in S["corrections"])
-    parts.append(f'<h2 id="corr"><span class="n">{n0+2:02d}</span>원문 글의 바로잡을 점</h2><p style="font-size:14px;color:var(--muted)">보존회에 공유된 글과 AI 자료에서 사실과 다르거나 확인되지 않은 부분이에요. 논쟁에서 상대가 먼저 지적할 수 있는 대목이라 미리 고쳐 두는 것이 안전해요.</p><div class="tw"><table class="corr"><tr><th style="width:32%">원문 표현</th><th style="width:34%">바른 내용</th><th>이유</th></tr>{rows}</table></div>')
+    parts.append(f'<h2 id="corr"><span class="n">{num["corr"]:02d}</span>원문 글의 바로잡을 점</h2><p style="font-size:14px;color:var(--muted)">보존회에 공유된 글과 AI 자료에서 사실과 다르거나 확인되지 않은 부분이에요. 논쟁에서 상대가 먼저 지적할 수 있는 대목이라 미리 고쳐 두는 것이 안전해요.</p><div class="tw"><table class="corr"><tr><th style="width:32%">원문 표현</th><th style="width:34%">바른 내용</th><th>이유</th></tr>{rows}</table></div>')
 
 # 실행 권고
-parts.append(f'<h2 id="rec"><span class="n">{n0+3:02d}</span>실행 권고</h2><div class="card"><ol>' + "".join(f"<li>{fn(r)}</li>" for r in S["recommendations"]) + "</ol></div>")
+parts.append(f'<h2 id="rec"><span class="n">{num["rec"]:02d}</span>실행 권고</h2><div class="card"><ol>' + "".join(f"<li>{fn(r)}</li>" for r in S["recommendations"]) + "</ol></div>")
 
 # 남은 과제 + 점검 결과
 unc = list(S.get("uncertainties", []))
@@ -142,10 +145,9 @@ if found:
 
 # 출처
 items = "".join(f'<li id="ref{r["n"]}"><a href="{esc(r["url"])}">{esc(r["title"])}</a>' + (f' — {esc(r["publisher"])}' if r.get("publisher") else "") + (f' ({esc(r["date"])})' if r.get("date") else "") + (f' <span style="color:var(--muted)">{esc(r["note"])}</span>' if r.get("note") else "") + "</li>" for r in sorted(S["references"], key=lambda r: r["n"]))
-parts.append(f'<h2 id="ref"><span class="n">{n0+4:02d}</span>출처</h2><ol class="src">{items}</ol>')
+parts.append(f'<h2 id="ref"><span class="n">{num["ref"]:02d}</span>출처</h2><ol class="src">{items}</ol>')
 
-parts.append("""<footer>2026년 9월 30일 작성 · 이 문서는 공개 자료를 바탕으로 한 정리이며 법률 자문이나 학술 감정이 아니에요. 그림 1~3은 AI 상상도로 실제 유구·인물의 고증 자료가 아니에요. 함께 보기: <a href="index.html">상판리 가마터 정리</a> · <a href="puzzle.html">파편 맞추기 퍼즐</a></footer>
-</div></body></html>""")
+parts.append("<footer>" + S.get("footer_html", '2026년 9월 30일 작성 · 이 문서는 공개 자료를 바탕으로 한 정리이며 법률 자문이나 학술 감정이 아니에요. 그림 1~3은 AI 상상도로 실제 유구·인물의 고증 자료가 아니에요. 함께 보기: <a href="index.html">상판리 가마터 정리</a> · <a href="bojonhoe.html">보존회 운영 원칙</a> · <a href="puzzle.html">파편 맞추기 퍼즐</a>') + "</footer>\n</div></body></html>")
 
 open(out, "w", encoding="utf-8").write("\n".join(parts))
 print("written", out, len("\n".join(parts)) // 1024, "KB")
